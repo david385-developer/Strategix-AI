@@ -23,6 +23,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useBrand } from "@/hooks/use-brand";
 import { useBilling } from "@/hooks/use-billing";
 import { billingService } from "@/services/billing";
+import { API_BASE_URL } from "@/lib/api-client";
 
 const sections = [
   { id: "workspace", label: "Workspace", icon: Building2 },
@@ -557,7 +558,7 @@ export default function SettingsPage() {
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-medium text-foreground">INR {inv.total}</span>
                             <a
-                              href={`http://localhost:5000${inv.downloadUrl}`}
+                              href={`${API_BASE_URL.replace(/\/api$/, "")}${inv.downloadUrl}`}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 rounded bg-secondary hover:bg-secondary/80 px-2 py-1 text-xs text-secondary-foreground transition-colors"
