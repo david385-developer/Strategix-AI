@@ -58,6 +58,22 @@ const faqs = [
 ];
 
 export default function LandingPage() {
+  const handlePricingClick = (planName: string) => {
+    const planMap: Record<string, string> = {
+      "Starter": "free",
+      "Growth": "starter",
+      "Scale": "professional"
+    };
+    const planId = planMap[planName] || "free";
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      window.location.href = `/app/settings?tab=billing&checkoutPlanId=${planId}`;
+    } else {
+      window.location.href = `/register?checkoutPlanId=${planId}`;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav />
@@ -429,16 +445,19 @@ export default function LandingPage() {
                   )}
                   <p className="font-display text-lg font-semibold">{p.name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{p.desc}</p>
-                  <div className="mt-5 flex items-baseline gap-1">
-                    <span className="font-display text-4xl font-bold">{p.price}</span>
-                    <span className="text-sm text-muted-foreground">{p.period}</span>
+                  <div 
+                    className="mt-5 flex items-baseline gap-1 cursor-pointer hover:text-primary transition-colors font-display text-4xl font-bold"
+                    onClick={() => handlePricingClick(p.name)}
+                  >
+                    <span>{p.price}</span>
+                    <span className="text-sm font-sans font-normal text-muted-foreground">{p.period}</span>
                   </div>
                   <Button
                     className="mt-5 w-full"
                     variant={p.highlight ? "default" : "outline"}
-                    asChild
+                    onClick={() => handlePricingClick(p.name)}
                   >
-                    <Link to="/register">{p.cta}</Link>
+                    {p.cta}
                   </Button>
                   <ul className="mt-6 space-y-3">
                     {p.features.map((f) => (

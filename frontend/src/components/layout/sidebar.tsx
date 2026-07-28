@@ -1,5 +1,5 @@
 import * as React from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutDashboard, Megaphone, SquarePen as PenSquare, CalendarDays, ChartBar as BarChart3, Sparkles, Palette, Users, Bell, Settings, ChevronLeft, ChevronDown, Zap, Plus, CircleHelp } from "lucide-react";
 import { useUIStore } from "@/lib/ui-store";
@@ -23,6 +23,7 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const navigate = useNavigate();
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggle = useUIStore((s) => s.toggleSidebar);
   const mobileOpen = useUIStore((s) => s.sidebarOpen);
@@ -37,7 +38,7 @@ export function Sidebar() {
   const unreadCount = notifications.filter((n: any) => !n.read).length;
 
   const content = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Logo / Workspace */}
       <div className="flex items-center gap-2.5 border-b border-sidebar-border px-4 py-4">
         <button
@@ -145,7 +146,7 @@ export function Sidebar() {
             <p className="mb-3 text-xs text-sidebar-foreground/60">
               Unlock unlimited AI generations and advanced analytics.
             </p>
-            <Button size="sm" className="w-full">
+            <Button onClick={() => navigate("/app/settings?tab=subscription")} size="sm" className="w-full">
               Upgrade
             </Button>
           </div>
@@ -185,7 +186,14 @@ export function Sidebar() {
           collapsed ? "w-[72px]" : "w-[260px]"
         )}
       >
-        <div className="fixed inset-y-0 left-0 z-30 h-full">{content}</div>
+        <div 
+          className={cn(
+            "fixed inset-y-0 left-0 z-30 h-full transition-[width] duration-300",
+            collapsed ? "w-[72px]" : "w-[260px]"
+          )}
+        >
+          {content}
+        </div>
       </aside>
 
       {/* Mobile */}

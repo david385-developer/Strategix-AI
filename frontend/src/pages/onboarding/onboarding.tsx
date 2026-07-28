@@ -88,7 +88,13 @@ export default function OnboardingPage() {
       setStep((s) => s + 1);
     } else {
       toast.success("Workspace ready!", "Welcome to Strategix AI.");
-      navigate("/app/dashboard");
+      const checkoutPlanId = localStorage.getItem("checkoutPlanId");
+      if (checkoutPlanId) {
+        localStorage.removeItem("checkoutPlanId");
+        navigate(`/app/settings?tab=billing&checkoutPlanId=${checkoutPlanId}`);
+      } else {
+        navigate("/app/dashboard");
+      }
     }
   };
   const back = () => step > 0 && setStep((s) => s - 1);

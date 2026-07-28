@@ -70,6 +70,41 @@ export const cleanAndParseJson = (text, schema) => {
     }
     const rawJson = JSON.parse(match[0]);
 
+    // Generic string array normalization helper to parse objects if returned by LLMs
+    const normalizeStringArray = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.map(item => {
+        if (typeof item === "object" && item !== null) {
+          const name = item.name || item.title || item.role || item.point || "";
+          const desc = item.description || item.desc || item.profile || item.text || "";
+          return name && desc ? `${name}: ${desc}` : name || desc || JSON.stringify(item);
+        }
+        return String(item);
+      });
+    };
+
+    const stringArrayKeys = [
+      "customerPersonas", 
+      "targetAudience", 
+      "marketingObjectives", 
+      "targetAudiencePoints", 
+      "funnelPoints", 
+      "postingSchedulePoints", 
+      "budgetPoints", 
+      "kpiPoints", 
+      "contentPillars",
+      "budgetRecommendations",
+      "kpiRecommendations",
+      "marketingRisks",
+      "successMetrics"
+    ];
+
+    for (const key of stringArrayKeys) {
+      if (rawJson[key]) {
+        rawJson[key] = normalizeStringArray(rawJson[key]);
+      }
+    }
+
     // Key normalization for campaign strategy responses
     if (rawJson.audience && !rawJson.targetAudiencePoints) {
       rawJson.targetAudiencePoints = Array.isArray(rawJson.audience) ? rawJson.audience : [rawJson.audience];

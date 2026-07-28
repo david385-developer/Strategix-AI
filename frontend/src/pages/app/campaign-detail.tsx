@@ -1,6 +1,7 @@
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, Heart, Zap, DollarSign, Calendar, Target, Users, TrendingUp, Sparkles, MoveHorizontal as MoreHorizontal, CreditCard as Edit, Copy, Pause, Play, CircleCheck as CheckCircle2, Clock, Image as ImageIcon, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Eye, Heart, Zap, DollarSign, Calendar, Target, Users, TrendingUp, Sparkles, MoveHorizontal as MoreHorizontal, CreditCard as Edit, Copy, Pause, Play, CircleCheck as CheckCircle2, Clock, Image as ImageIcon, MessageCircle, Send, Check, AlertTriangle, Mail } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 } from "recharts";
 import { useCampaign } from "@/hooks/use-campaigns";
 import { useContent } from "@/hooks/use-content";
+import { integrationsService } from "@/services/integrations";
 import { campaignStatusConfig, platformIcons, contentStatusConfig } from "@/lib/content-helpers";
 import { cn, formatNumber, formatCurrency, formatDate } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -43,11 +45,35 @@ const timeline = [
   { status: "pending", title: "Final report", time: "Aug 31", user: "—" },
 ];
 
+import { useToast } from "@/components/ui/toast";
+
 export default function CampaignDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
 
-  const { campaign, isLoading, aiStrategy, generateStrategy, isGeneratingStrategy } = useCampaign(id);
+  useEffect(() => {
+    integrationsService.getGoogleStatus()
+      .then(res => {
+        if (res.success) {
+          setGoogleConnected(res.data.connected);
+        }
+      })
+      .catch(() => setGoogleConnected(false));
+  }, []);
+
+  const { campaign, isLoading, aiStrategy, generateStrategy, isGeneratingStrategy, emailCampaign, isEmailing } = useCampaign(id);
+  
+  const handleEmailStrategy = async () => {
+    try {
+      await emailCampaign();
+      toast.success("Details Emailed!", "The campaign details and AI strategy report have been sent to your inbox.");
+    } catch (err: any) {
+      toast.error("Email failed", err.response?.data?.message || "Could not dispatch campaign details email.");
+    }
+  };
+
   const { contentItems: dbContentItems } = useContent({ campaign: campaign?.name });
 
   if (isLoading) {
@@ -94,6 +120,9 @@ export default function CampaignDetailPage() {
             <Badge variant={cfg.variant}>
               <span className={cn("h-1.5 w-1.5 rounded-full", cfg.dot)} /> {cfg.label}
             </Badge>
+            <Button variant="outline" size="sm" onClick={handleEmailStrategy} disabled={isEmailing}>
+              <Mail className="h-4 w-4" /> Email Details
+            </Button>
             <Button variant="outline" size="sm">
               <Edit className="h-4 w-4" /> Edit
             </Button>
@@ -103,6 +132,30 @@ export default function CampaignDetailPage() {
           </>
         }
       />
+
+      {/* Google Calendar sync status banner */}
+      <Card className="border-border bg-card">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          {googleConnected === null ? (
+            <span className="text-muted-foreground">Checking calendar sync status...</span>
+          ) : googleConnected ? (
+            <div className="flex items-center gap-2 text-green-600 font-medium">
+              <Check className="h-4 w-4" />
+              <span>Google Calendar Synchronization active. This campaign is successfully synced.</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <span>Google Calendar not connected. Connect in Settings to enable auto-sync and email reminders.</span>
+            </div>
+          )}
+          {googleConnected && (
+            <span className="text-muted-foreground font-normal bg-secondary px-2.5 py-1 rounded-full">
+              Reminders: 7d, 3d, 1d, 1h before campaign
+            </span>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Top stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

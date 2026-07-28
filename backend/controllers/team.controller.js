@@ -1,6 +1,7 @@
 import Task from "../models/task.model.js";
 import ApiResponse from "../utils/apiResponse.js";
 import ApiError from "../utils/apiError.js";
+import ActivityService from "../services/activity.service.js";
 
 class TeamController {
   static async getTasks(req, res, next) {
@@ -46,6 +47,18 @@ class TeamController {
 
       await task.save();
 
+      await ActivityService.logAndNotify({
+        user: req.user.name,
+        initials: req.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+        action: "created task",
+        target: task.title,
+        type: "task",
+        workspaceId,
+        notifyTitle: "Task Created",
+        notifyDesc: `${req.user.name} created task "${task.title}" and assigned it to ${task.assignee}`,
+        notifyIcon: "system"
+      });
+
       return ApiResponse.success(res, "Task created successfully", {
         task: {
           id: task._id,
@@ -73,15 +86,29 @@ class TeamController {
       if (campaign !== undefined) updateFields.campaign = campaign;
       if (campaignId !== undefined) updateFields.campaignId = campaignId;
 
+      const oldTask = await Task.findById(req.params.id);
+      if (!oldTask) {
+        throw new ApiError("Task not found", 404);
+      }
+
       const task = await Task.findByIdAndUpdate(
         req.params.id,
         { $set: updateFields },
         { new: true, runValidators: true }
       );
 
-      if (!task) {
-        throw new ApiError("Task not found", 404);
-      }
+      const actionStr = status === "done" && oldTask.status !== "done" ? "completed task" : "updated task";
+      await ActivityService.logAndNotify({
+        user: req.user.name,
+        initials: req.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+        action: actionStr,
+        target: task.title,
+        type: "task",
+        workspaceId: task.workspaceId,
+        notifyTitle: actionStr === "completed task" ? "Task Completed" : "Task Updated",
+        notifyDesc: `${req.user.name} ${actionStr} "${task.title}"`,
+        notifyIcon: "system"
+      });
 
       return ApiResponse.success(res, "Task updated successfully", {
         task: {
@@ -105,6 +132,19 @@ class TeamController {
       if (!task) {
         throw new ApiError("Task not found", 404);
       }
+
+      await ActivityService.logAndNotify({
+        user: req.user.name,
+        initials: req.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+        action: "deleted task",
+        target: task.title,
+        type: "task",
+        workspaceId: task.workspaceId,
+        notifyTitle: "Task Deleted",
+        notifyDesc: `${req.user.name} deleted task "${task.title}"`,
+        notifyIcon: "system"
+      });
+
       return ApiResponse.success(res, "Task deleted successfully");
     } catch (error) {
       next(error);

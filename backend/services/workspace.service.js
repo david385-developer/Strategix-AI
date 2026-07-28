@@ -1,10 +1,12 @@
 import Workspace from "../models/workspace.model.js";
 import User from "../models/user.model.js";
 import BrandProfile from "../models/brandProfile.model.js";
+import Task from "../models/task.model.js";
 import ApiError from "../utils/apiError.js";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import NotificationService from "./notification.service.js";
+import EmailService from "./email.service.js";
 
 class WorkspaceService {
   static async createWorkspace(ownerId, name, urlSlug) {
@@ -89,19 +91,39 @@ class WorkspaceService {
   static async getTeamMembers(workspaceId) {
     // Return all users active in this workspace
     const users = await User.find({ activeWorkspaceId: workspaceId }).select("-password");
-    
-    // Format to match TeamMember interface
-    return users.map((user) => ({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      initials: user.name.split(" ").map(n => n[0]).join("").toUpperCase(),
-      color: "blue", // Mock visual theme color
-      tasksAssigned: 5, // Mock task stats
-      tasksCompleted: 3,
-      lastActive: "Today",
-    }));
+    const colors = ["hsl(243 75% 59%)", "hsl(158 64% 52%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(199 89% 48%)"];
+
+    const formattedMembers = [];
+    for (const user of users) {
+      const tasksAssigned = await Task.countDocuments({ workspaceId, assignee: user.name });
+      const tasksCompleted = await Task.countDocuments({ workspaceId, assignee: user.name, status: "done" });
+
+      const now = new Date();
+      const diffMs = now - new Date(user.updatedAt);
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      let lastActive = "Active now";
+      if (diffMins >= 1 && diffMins < 60) lastActive = `${diffMins}m ago`;
+      else if (diffHours >= 1 && diffHours < 24) lastActive = `${diffHours}h ago`;
+      else if (diffDays >= 1) lastActive = `${diffDays}d ago`;
+
+      const color = colors[Math.abs(user.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length];
+
+      formattedMembers.push({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        initials: user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+        color,
+        tasksAssigned,
+        tasksCompleted,
+        lastActive,
+      });
+    }
+
+    return formattedMembers;
   }
 
   static async inviteMember(workspaceId, memberData) {
@@ -130,6 +152,16 @@ class WorkspaceService {
     }
 
     await NotificationService.notifyWorkspace(workspaceId, "Team member invited", `Team invitation sent to ${name} (${email}) as a ${role}.`, "mention");
+
+    // Trigger team invitation email asynchronously
+    Workspace.findById(workspaceId)
+      .then(workspace => {
+        const workspaceName = workspace ? workspace.name : "Strategix Workspace";
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const inviteLink = `${frontendUrl}/login?inviteEmail=${encodeURIComponent(email)}`;
+        return EmailService.sendTeamInvitationEmail(email, "A Strategix Team Member", workspaceName, inviteLink);
+      })
+      .catch(console.error);
 
     return {
       id: user._id,

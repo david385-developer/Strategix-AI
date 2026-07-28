@@ -38,7 +38,14 @@ export default function LoginPage() {
     try {
       await login(data);
       toast.success("Welcome back!", "You've signed in to Strategix AI.");
-      navigate("/app/dashboard");
+
+      const params = new URLSearchParams(window.location.search);
+      const checkoutPlanId = params.get("checkoutPlanId");
+      if (checkoutPlanId) {
+        navigate(`/app/settings?tab=billing&checkoutPlanId=${checkoutPlanId}`);
+      } else {
+        navigate("/app/dashboard");
+      }
     } catch (err: any) {
       toast.error("Login failed", err.response?.data?.message || "Invalid credentials.");
     }

@@ -79,6 +79,10 @@ const campaignSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    isSynchronized: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

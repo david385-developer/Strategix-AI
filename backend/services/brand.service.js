@@ -1,5 +1,6 @@
 import BrandProfile from "../models/brandProfile.model.js";
 import ApiError from "../utils/apiError.js";
+import ActivityService from "./activity.service.js";
 
 class BrandService {
   static async getBrandProfile(workspaceId) {
@@ -18,7 +19,7 @@ class BrandService {
     return brand;
   }
 
-  static async updateBrandProfile(workspaceId, updateData) {
+  static async updateBrandProfile(workspaceId, updateData, userObj = null) {
     const brand = await BrandProfile.findOneAndUpdate(
       { workspaceId },
       { $set: updateData },
@@ -26,6 +27,19 @@ class BrandService {
     );
     if (!brand) {
       throw new ApiError("Brand profile not found", 404);
+    }
+    if (userObj) {
+      await ActivityService.logAndNotify({
+        user: userObj.name,
+        initials: userObj.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+        action: "updated brand profile for",
+        target: brand.businessName,
+        type: "brand",
+        workspaceId,
+        notifyTitle: "Brand Profile Updated",
+        notifyDesc: `${userObj.name} updated the brand profile details.`,
+        notifyIcon: "system"
+      });
     }
     return brand;
   }

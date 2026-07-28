@@ -26,6 +26,7 @@ import aiRoutes from "./routes/ai.routes.js";
 import calendarRoutes from "./routes/calendar.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
 import subscriptionRoutes from "./routes/subscription.routes.js";
+import integrationRoutes from "./routes/integration.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,6 +103,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/integrations", integrationRoutes);
 
 // Root path heartbeat check
 app.get("/", (req, res) => {

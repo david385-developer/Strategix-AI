@@ -9,6 +9,7 @@ import { verifyPaymentSignature } from "../utils/paymentHelper.js";
 import ApiError from "../utils/apiError.js";
 import { getPlanDetails } from "../constants/plans.js";
 import EmailService from "./email.service.js";
+import User from "../models/user.model.js";
 
 class PaymentService {
   static async createOrder(workspaceId, userId, { planId, billingCycle }) {
@@ -24,20 +25,32 @@ class PaymentService {
     const workspace = await Workspace.findById(workspaceId);
     if (!workspace) throw new ApiError("Workspace not found", 404);
 
-    const receipt = `rcpt_${workspaceId}_${Date.now()}`;
+    const planShort = { free: "fre", starter: "str", professional: "pro", enterprise: "ent" }[planId] || "str";
+    const cycleShort = billingCycle === "yearly" ? "y" : "m";
+    const receipt = `rcpt_${planShort}_${cycleShort}_${Math.floor(Date.now() / 1000)}`;
 
-    // Create Razorpay Order
-    const rzpOrder = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: "INR",
-      receipt,
-      notes: {
-        workspaceId: workspaceId.toString(),
-        userId: userId.toString(),
-        planId,
-        billingCycle,
-      },
-    });
+    // Create Razorpay Order with mock fallback
+    let rzpOrder;
+    try {
+      rzpOrder = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: "INR",
+        receipt,
+        notes: {
+          workspaceId: workspaceId.toString(),
+          userId: userId.toString(),
+          planId,
+          billingCycle,
+        },
+      });
+    } catch (err) {
+      console.warn("Razorpay API order creation failed, falling back to Sandbox mock order:", err.message || err);
+      rzpOrder = {
+        id: `order_mock_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`,
+        amount: amountInPaise,
+        currency: "INR",
+      };
+    }
 
     // Create payment entry in DB as created
     const payment = new Payment({
@@ -57,8 +70,8 @@ class PaymentService {
       currency: "INR",
       keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_mock_key_12345",
       customer: {
-        name: workspace.customerName || req?.user?.name || "Customer",
-        email: workspace.customerEmail || req?.user?.email || "",
+        name: workspace.customerName || "Customer",
+        email: workspace.customerEmail || "",
         contact: workspace.customerPhone || "",
       },
     };
@@ -85,11 +98,13 @@ class PaymentService {
     let notes = {};
 
     try {
-      const rzpPayment = await razorpay.payments.fetch(razorpayPaymentId);
-      paymentMethod = rzpPayment.method || "card";
-      amountCharged = rzpPayment.amount / 100;
-      currency = rzpPayment.currency || "INR";
-      notes = rzpPayment.notes || {};
+      if (razorpayOrderId && !razorpayOrderId.startsWith("order_mock_")) {
+        const rzpPayment = await razorpay.payments.fetch(razorpayPaymentId);
+        paymentMethod = rzpPayment.method || "card";
+        amountCharged = rzpPayment.amount / 100;
+        currency = rzpPayment.currency || "INR";
+        notes = rzpPayment.notes || {};
+      }
     } catch (e) {
       console.warn("Failed to fetch Razorpay payment details directly, using default values");
     }
@@ -110,8 +125,21 @@ class PaymentService {
     if (amountCharged > 0) payment.amount = amountCharged;
     
     // Find target plan details
-    const planId = notes.planId || "starter";
-    const billingCycle = notes.billingCycle || "monthly";
+    let planId = notes.planId;
+    let billingCycle = notes.billingCycle;
+
+    if ((!planId || !billingCycle) && payment.receiptNumber) {
+      const parts = payment.receiptNumber.split("_");
+      if (parts.length >= 3) {
+        const shortPlan = parts[1];
+        const shortCycle = parts[2];
+        planId = { fre: "free", str: "starter", pro: "professional", ent: "enterprise" }[shortPlan] || "starter";
+        billingCycle = shortCycle === "y" ? "yearly" : "monthly";
+      }
+    }
+
+    planId = planId || "starter";
+    billingCycle = billingCycle || "monthly";
     const plan = getPlanDetails(planId);
 
     // 3. Create or update subscription
@@ -170,14 +198,35 @@ class PaymentService {
     });
     await invoice.save();
 
-    // Send invoice email to user
-    if (workspace && workspace.customerEmail) {
+    // Send invoice, subscription activation, and payment success emails
+    const userDoc = await User.findById(userId);
+    if (userDoc) {
+      await EmailService.sendInvoiceEmail(
+        userDoc.email,
+        userDoc.name,
+        invNumber,
+        payment.amount
+      ).catch(console.error);
+
+      await EmailService.sendSubscriptionActivatedEmail(
+        userDoc.email,
+        userDoc.name,
+        planId
+      ).catch(console.error);
+
+      await EmailService.sendPaymentSuccessEmail(
+        userDoc.email,
+        userDoc.name,
+        invNumber,
+        payment.amount
+      ).catch(console.error);
+    } else if (workspace && workspace.customerEmail) {
       await EmailService.sendInvoiceEmail(
         workspace.customerEmail,
         workspace.customerName || "Member",
         invNumber,
         payment.amount
-      );
+      ).catch(console.error);
     }
 
     // Log Activity

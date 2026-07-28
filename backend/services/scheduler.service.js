@@ -4,16 +4,47 @@ import Workspace from "../models/workspace.model.js";
 import Payment from "../models/payment.model.js";
 import Invoice from "../models/invoice.model.js";
 import NotificationService from "./notification.service.js";
+import CampaignReminderService from "./campaignReminder.service.js";
+import EmailService from "./email.service.js";
+import LinkedInService from "./linkedin.service.js";
 
 class SchedulerService {
   static init() {
     console.log("Initializing background cron scheduler...");
+
+    // Run campaign email reminders check every minute
+    cron.schedule("* * * * *", async () => {
+      try {
+        await CampaignReminderService.sendDueReminders();
+      } catch (error) {
+        console.error("Error in campaign reminders scheduler task:", error);
+      }
+    });
+
+    // Run failed emails retry worker every minute
+    cron.schedule("* * * * *", async () => {
+      try {
+        await EmailService.retryFailedEmails();
+      } catch (error) {
+        console.error("Error in email retry scheduler task:", error);
+      }
+    });
+
+    // Run LinkedIn scheduled publisher every minute
+    cron.schedule("* * * * *", async () => {
+      try {
+        await LinkedInService.publishScheduled();
+      } catch (error) {
+        console.error("Error in LinkedIn scheduled publishing task:", error);
+      }
+    });
 
     // Run every day at midnight (00:00)
     cron.schedule("0 0 * * *", async () => {
       console.log("Running daily subscription check background worker...");
       try {
         await SchedulerService.checkExpirationsAndRenewals();
+        await LinkedInService.syncAllEngagement();
       } catch (error) {
         console.error("Error in daily background check task:", error);
       }

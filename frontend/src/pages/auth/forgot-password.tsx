@@ -8,6 +8,7 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authService } from "@/services/auth";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -18,6 +19,8 @@ type FormData = z.infer<typeof schema>;
 export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
   const [email, setEmail] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -28,9 +31,18 @@ export default function ForgotPasswordPage() {
     defaultValues: { email: "" },
   });
 
-  const onSubmit = (data: FormData) => {
-    setEmail(data.email);
-    setSubmitted(true);
+  const onSubmit = async (data: FormData) => {
+    try {
+      setErrorMsg("");
+      setIsSubmitting(true);
+      await authService.forgotPassword(data.email);
+      setEmail(data.email);
+      setSubmitted(true);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.message || "Failed to request password reset. Check if the email exists.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -45,6 +57,11 @@ export default function ForgotPasswordPage() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+            {errorMsg && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+                {errorMsg}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -60,8 +77,8 @@ export default function ForgotPasswordPage() {
               {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
-              Send reset link <ArrowRight className="h-4 w-4" />
+            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send reset link"} <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
 

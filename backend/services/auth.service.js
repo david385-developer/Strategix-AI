@@ -9,6 +9,7 @@ import {
 } from "../utils/jwtHelper.js";
 import ApiError from "../utils/apiError.js";
 import mongoose from "mongoose";
+import EmailService from "./email.service.js";
 
 class AuthService {
   static async registerUser(userData) {
@@ -70,6 +71,9 @@ class AuthService {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Trigger asynchronous Welcome Email dispatch
+      EmailService.sendWelcomeEmail(user.email, user.name).catch(console.error);
 
       return {
         user: {

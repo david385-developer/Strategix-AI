@@ -1,15 +1,19 @@
 import Campaign from "../models/campaign.model.js";
-import BrandProfile from "../models/brandProfile.model.js";
-import AIStrategy from "../models/aiStrategy.model.js";
 import Content from "../models/content.model.js";
+import AIStrategy from "../models/aiStrategy.model.js";
 import CalendarEvent from "../models/calendarEvent.model.js";
+import BrandProfile from "../models/brandProfile.model.js";
 import AIService from "./ai.service.js";
+import NotificationService from "./notification.service.js";
+import ActivityService from "./activity.service.js";
 import { campaignStrategyPrompt } from "../prompts/campaignStrategyPrompt.js";
 import { campaignStrategySchema } from "../utils/responseParser.js";
 import { getPaginationOptions, buildFilterQuery, getPaginationMetadata } from "../utils/pagination.js";
 import ApiError from "../utils/apiError.js";
 import mongoose from "mongoose";
-import NotificationService from "./notification.service.js";
+import GoogleCalendarService from "./googleCalendar.service.js";
+import CampaignReminderService from "./campaignReminder.service.js";
+import EmailService from "./email.service.js";
 
 class CampaignService {
   static validateCampaignData(data) {
@@ -79,15 +83,34 @@ class CampaignService {
     };
   }
 
-  static async createCampaign(workspaceId, ownerId, campaignData) {
+  static async createCampaign(workspaceId, userObj, campaignData) {
     CampaignService.validateCampaignData(campaignData);
     const campaign = new Campaign({
       ...campaignData,
       workspaceId,
-      ownerId,
+      ownerId: userObj._id,
     });
     const saved = await campaign.save();
-    await NotificationService.notifyWorkspace(workspaceId, "Campaign created", `${saved.name} is ready for planning.`, "system");
+
+    // Trigger Google Calendar sync and schedule reminder emails
+    await GoogleCalendarService.createEvent(userObj._id, saved);
+    await CampaignReminderService.scheduleReminders(saved);
+
+    // Trigger Campaign Created Email
+    EmailService.sendCampaignCreatedEmail(userObj.email, userObj.name, saved.name).catch(console.error);
+
+    await ActivityService.logAndNotify({
+      user: userObj.name,
+      initials: userObj.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2),
+      action: "created campaign",
+      target: saved.name,
+      type: "campaign",
+      workspaceId,
+      notifyTitle: "Campaign Created",
+      notifyDesc: `${userObj.name} created campaign "${saved.name}"`,
+      notifyIcon: "system"
+    });
+
     return saved;
   }
 
@@ -138,24 +161,64 @@ class CampaignService {
       throw new ApiError("Campaign not found", 404);
     }
     await CampaignService.automateCampaignStatus(campaign);
-    return campaign;
+    return {
+      id: campaign._id,
+      name: campaign.name,
+      status: campaign.status,
+      channel: campaign.channel,
+      budget: campaign.budget,
+      spent: campaign.spent,
+      startDate: campaign.startDate.toISOString().split("T")[0],
+      endDate: campaign.endDate.toISOString().split("T")[0],
+      progress: campaign.progress,
+      goal: campaign.goal,
+      reach: campaign.reach,
+      engagement: campaign.engagement,
+      conversions: campaign.conversions,
+      color: campaign.color,
+      owner: { name: campaign.ownerId?.name || "Strategix Member", initials: (campaign.ownerId?.name || "SM").split(" ").map(n => n[0]).join("") },
+    };
   }
 
-  static async updateCampaign(campaignId, workspaceId, updateData) {
+  static async updateCampaign(campaignId, workspaceId, updateData, userObj) {
     CampaignService.validateCampaignData(updateData);
     const campaign = await Campaign.findOneAndUpdate(
       { _id: campaignId, workspaceId },
       { $set: updateData },
       { new: true, runValidators: true }
-    );
+    ).populate("ownerId", "name");
     if (!campaign) {
       throw new ApiError("Campaign not found", 404);
     }
     await CampaignService.automateCampaignStatus(campaign);
-    return campaign;
+
+    // Sync updates with Google Calendar and adjust reminder schedules
+    await GoogleCalendarService.updateEvent(userObj._id, campaign);
+    await CampaignReminderService.updateReminders(campaign);
+
+    // Trigger Campaign Updated Email
+    EmailService.sendCampaignUpdatedEmail(userObj.email, userObj.name, campaign.name).catch(console.error);
+
+    return {
+      id: campaign._id,
+      name: campaign.name,
+      status: campaign.status,
+      channel: campaign.channel,
+      budget: campaign.budget,
+      spent: campaign.spent,
+      startDate: campaign.startDate.toISOString().split("T")[0],
+      endDate: campaign.endDate.toISOString().split("T")[0],
+      progress: campaign.progress,
+      goal: campaign.goal,
+      reach: campaign.reach,
+      engagement: campaign.engagement,
+      conversions: campaign.conversions,
+      color: campaign.color,
+      owner: { name: campaign.ownerId?.name || "Strategix Member", initials: (campaign.ownerId?.name || "SM").split(" ").map(n => n[0]).join("") },
+    };
   }
 
-  static async deleteCampaign(campaignId, workspaceId) {
+  static async deleteCampaign(campaignId, workspaceId, userObj) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -183,6 +246,11 @@ class CampaignService {
 
       await session.commitTransaction();
       session.endSession();
+
+      // Trigger calendar deletion and reminder cancellations post-transaction commit
+      await GoogleCalendarService.deleteEvent(userObj._id, campaignId);
+      await CampaignReminderService.cancelReminders(campaignId);
+
       return true;
     } catch (error) {
       await session.abortTransaction();
@@ -199,7 +267,7 @@ class CampaignService {
     return CampaignService.formatStrategyForFrontend(strategy);
   }
 
-  static async generateAIStrategy(campaignId, workspaceId) {
+  static async generateAIStrategy(campaignId, workspaceId, userObj = null) {
     const campaign = await Campaign.findOne({ _id: campaignId, workspaceId });
     if (!campaign) {
       throw new ApiError("Campaign not found", 404);
@@ -246,7 +314,7 @@ class CampaignService {
         predictedReach: Math.round((campaign.budget || 1000) * 12),
         predictedEngagement: Math.round((campaign.budget || 1000) * 2.5),
         predictedSignups: Math.round((campaign.budget || 1000) * 0.35),
-      predictedShares: Math.round((campaign.budget || 1000) * 0.15)
+        predictedShares: Math.round((campaign.budget || 1000) * 0.15)
         ,marketingObjectives: [`Increase qualified awareness for ${campaign.name}`, "Generate measurable demand", "Improve conversion efficiency"],
         targetAudience: [`${brand.targetAudience || "Decision-makers"} in ${brand.industry}`],
         customerPersonas: ["Growth-minded marketing leader seeking scalable execution", "Founder balancing limited budget with ambitious growth"],
@@ -278,11 +346,39 @@ class CampaignService {
     campaign.conversions = strategy.predictedSignups;
     campaign.healthScore = campaign.calculateHealthScore();
     await campaign.save();
-    await NotificationService.notifyWorkspace(campaign.workspaceId, "AI strategy generated", `A strategy is ready for ${campaign.name}.`, "ai");
+
+    const authorName = userObj ? userObj.name : "AI Assistant";
+    const authorInitials = userObj ? userObj.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "AI";
+    await ActivityService.logAndNotify({
+      user: authorName,
+      initials: authorInitials,
+      action: "generated AI strategy for",
+      target: campaign.name,
+      type: "ai",
+      workspaceId,
+      notifyTitle: "AI Strategy Generated",
+      notifyDesc: `AI strategy has been generated for campaign "${campaign.name}"`,
+      notifyIcon: "ai"
+    });
 
     return {
       campaign,
       strategy: CampaignService.formatStrategyForFrontend(strategy),
+    };
+  }
+
+  static async emailCampaignDetails(campaignId, workspaceId, userObj) {
+    const campaign = await Campaign.findOne({ _id: campaignId, workspaceId });
+    if (!campaign) throw new ApiError("Campaign not found", 404);
+
+    const strategy = await AIStrategy.findOne({ campaignId });
+
+    // Send email using new template
+    await EmailService.sendCampaignDetailsReportEmail(userObj.email, userObj.name, campaign, strategy);
+
+    return {
+      success: true,
+      message: "Campaign details email sent"
     };
   }
 }

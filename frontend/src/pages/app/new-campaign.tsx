@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Sparkles, Send, Target, Users, Filter, CalendarDays, DollarSign, TrendingUp, Check, ArrowRight, Loader as Loader2, Lightbulb, Megaphone, Zap, Eye, Heart, Share2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Send, Target, Users, Filter, CalendarDays, DollarSign, TrendingUp, Check, ArrowRight, Loader as Loader2, Lightbulb, Megaphone, Zap, Eye, Heart, Share2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast";
 
 import { useCampaigns } from "@/hooks/use-campaigns";
 import { campaignService } from "@/services/campaign";
+import { integrationsService } from "@/services/integrations";
 
 type Phase = "input" | "generating" | "result";
 
@@ -30,24 +31,48 @@ export default function NewCampaignPage() {
   const [objective, setObjective] = useState("");
   const [form, setForm] = useState({ name: "", budget: "", startDate: "", endDate: "" });
 
+  const [aiBudget, setAiBudget] = useState("10000");
+  const [aiStartDate, setAiStartDate] = useState(() => {
+    const today = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  });
+  const [aiEndDate, setAiEndDate] = useState(() => {
+    const future = new Date();
+    future.setDate(future.getDate() + 90);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`;
+  });
+
   const { createCampaign, isCreating } = useCampaigns();
   const [createdCampaignId, setCreatedCampaignId] = useState("");
   const [generatedStrategy, setGeneratedStrategy] = useState<any>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    integrationsService.getGoogleStatus()
+      .then(res => {
+        if (res.success) {
+          setGoogleConnected(res.data.connected);
+        }
+      })
+      .catch(() => setGoogleConnected(false));
+  }, []);
 
   const handleAIGenerate = async () => {
     if (!objective.trim()) return;
+    if (!aiBudget || !aiStartDate || !aiEndDate) {
+      toast.error("Required fields missing", "Please fill in the budget and dates for the campaign scheduling.");
+      return;
+    }
     setPhase("generating");
     try {
-      const now = new Date();
-      const end = new Date();
-      end.setDate(now.getDate() + 90);
-
       const res = await createCampaign({
         name: objective.length > 30 ? objective.slice(0, 27) + "..." : objective,
         goal: objective,
-        budget: 10000,
-        startDate: now.toISOString(),
-        endDate: end.toISOString(),
+        budget: Number(aiBudget),
+        startDate: new Date(aiStartDate).toISOString(),
+        endDate: new Date(aiEndDate).toISOString(),
         channel: ["linkedin", "twitter", "email"],
         status: "active",
       });
@@ -103,6 +128,30 @@ export default function NewCampaignPage() {
         </p>
       </div>
 
+      {/* Google Calendar sync status banner */}
+      <Card className="border-border bg-card">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          {googleConnected === null ? (
+            <span className="text-muted-foreground">Checking calendar sync status...</span>
+          ) : googleConnected ? (
+            <div className="flex items-center gap-2 text-green-600 font-medium">
+              <Check className="h-4 w-4" />
+              <span>Google Calendar Synchronization active. This campaign will automatically sync.</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <span>Google Calendar is not connected. Connect under Settings &gt; Integrations to auto-sync.</span>
+            </div>
+          )}
+          {googleConnected && (
+            <span className="text-muted-foreground font-normal bg-secondary px-2.5 py-1 rounded-full">
+              Reminders: 7d, 3d, 1d, 1h before campaign
+            </span>
+          )}
+        </CardContent>
+      </Card>
+
       <AnimatePresence mode="wait">
         {/* Input phase */}
         {phase === "input" && (
@@ -152,6 +201,39 @@ export default function NewCampaignPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* AI Planner Date & Budget Scheduling Selection */}
+                <div className="grid gap-4 border-t border-border/60 pt-4 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-budget" className="text-xs font-semibold">Budget (USD)</Label>
+                    <Input 
+                      id="ai-budget" 
+                      type="number" 
+                      placeholder="10000" 
+                      value={aiBudget} 
+                      onChange={(e) => setAiBudget(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-start" className="text-xs font-semibold">Start Date</Label>
+                    <Input 
+                      id="ai-start" 
+                      type="date" 
+                      value={aiStartDate} 
+                      onChange={(e) => setAiStartDate(e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-end" className="text-xs font-semibold">End Date</Label>
+                    <Input 
+                      id="ai-end" 
+                      type="date" 
+                      value={aiEndDate} 
+                      onChange={(e) => setAiEndDate(e.target.value)} 
+                    />
+                  </div>
+                </div>
+
                 <Button onClick={handleAIGenerate} disabled={!objective.trim() || isCreating} size="lg" className="w-full">
                   <Sparkles className="h-4 w-4" /> Generate strategy
                 </Button>

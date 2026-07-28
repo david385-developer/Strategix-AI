@@ -50,6 +50,11 @@ export const authService = {
     return res.data;
   },
 
+  async forgotPassword(email: string) {
+    const res = await apiClient.post("/auth/forgot-password", { email });
+    return res.data;
+  },
+
   getCurrentUser() {
     const userStr = localStorage.getItem("user");
     if (!userStr) return null;

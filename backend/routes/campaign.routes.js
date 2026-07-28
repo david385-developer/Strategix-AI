@@ -18,5 +18,6 @@ router.put("/:id", campaignValidator, validateRequest, CampaignController.update
 router.delete("/:id", CampaignController.delete);
 router.get("/:id/strategy", CampaignController.getAIStrategy);
 router.post("/:id/strategy/generate", aiLimiter, CampaignController.generateAIStrategy);
+router.post("/:id/email", CampaignController.emailCampaignDetails);
 
 export default router;

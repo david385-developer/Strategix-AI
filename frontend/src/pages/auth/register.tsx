@@ -46,6 +46,12 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: FormData) => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const checkoutPlanId = params.get("checkoutPlanId");
+      if (checkoutPlanId) {
+        localStorage.setItem("checkoutPlanId", checkoutPlanId);
+      }
+
       await registerUser(data);
       toast.success("Account created!", "Let's set up your workspace.");
       navigate("/onboarding");

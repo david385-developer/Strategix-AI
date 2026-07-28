@@ -15,7 +15,7 @@ class ContentController {
         conflictWarning = await ContentService.assertScheduleAvailable(workspaceId, req.body.platform, req.body.scheduledFor);
       }
 
-      const content = await ContentService.createContent(workspaceId, req.user._id, req.body);
+      const content = await ContentService.createContent(workspaceId, req.user, req.body);
       return ApiResponse.success(res, "Content created successfully", { content, conflictWarning }, 201);
     } catch (error) {
       next(error);
@@ -84,7 +84,7 @@ class ContentController {
       if (!workspaceId) {
         throw new ApiError("No active workspace selected", 400);
       }
-      const content = await ContentService.generateAIContent(workspaceId, req.user._id, req.body);
+      const content = await ContentService.generateAIContent(workspaceId, req.user, req.body);
       return ApiResponse.success(res, "Content generated successfully", { content }, 201);
     } catch (error) {
       next(error);
@@ -97,7 +97,7 @@ class ContentController {
       if (!instruction) {
         throw new ApiError("Rewrite instruction is required", 400);
       }
-      const content = await ContentService.rewriteAIContent(req.params.id, instruction, req.user.activeWorkspaceId);
+      const content = await ContentService.rewriteAIContent(req.params.id, instruction, req.user.activeWorkspaceId, req.user);
       return ApiResponse.success(res, "Content rewritten successfully", { content });
     } catch (error) {
       next(error);

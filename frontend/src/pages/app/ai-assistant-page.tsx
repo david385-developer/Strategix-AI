@@ -45,7 +45,7 @@ export default function AIAssistantPage() {
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       const res = await chat({ message: text, history });
       if (res.success) {
-        setMessages((m) => [...m, { id: Math.random().toString(36).slice(2), role: "assistant", content: res.data.response || res.data.message }]);
+        setMessages((m) => [...m, { id: Math.random().toString(36).slice(2), role: "assistant", content: res.data.content }]);
       }
     } catch (err: any) {
       toast.error("Chat failed", err.response?.data?.message || "Failed to communicate with Strategix AI.");

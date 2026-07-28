@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Building2, User, Palette, Bell, Shield, CreditCard, Moon, Sun,
   Check, LogOut, Camera, Mail, Lock, Smartphone, Globe, Crown,
-  Sparkles, Trash2, Download, RefreshCw, AlertTriangle
+  Sparkles, Trash2, Download, RefreshCw, AlertTriangle, X
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 import { useBrand } from "@/hooks/use-brand";
 import { useBilling } from "@/hooks/use-billing";
 import { billingService } from "@/services/billing";
+import { integrationsService } from "@/services/integrations";
 import { API_BASE_URL } from "@/lib/api-client";
 
 const sections = [
@@ -32,14 +33,28 @@ const sections = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "security", label: "Security", icon: Shield },
   { id: "subscription", label: "Subscription", icon: CreditCard },
+  { id: "integrations", label: "Integrations", icon: Globe },
   { id: "theme", label: "Appearance", icon: Sun },
 ];
 
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { theme, setTheme } = useUIStore();
   const [active, setActive] = useState("workspace");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam) {
+      const tabId = tabParam === "billing" ? "subscription" : tabParam;
+      const validSections = ["workspace", "profile", "brand", "notifications", "security", "subscription", "integrations", "theme"];
+      if (validSections.includes(tabId)) {
+        setActive(tabId);
+      }
+    }
+  }, [location.search]);
 
   const { user, updateProfile } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -86,6 +101,106 @@ export default function SettingsPage() {
   
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [showMockCheckoutModal, setShowMockCheckoutModal] = useState(false);
+  const [mockCheckoutOptions, setMockCheckoutOptions] = useState<any>(null);
+
+  // Integrations states
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email?: string; isSandbox?: boolean } | null>(null);
+  const [linkedinStatus, setLinkedinStatus] = useState<{ connected: boolean; name?: string; profilePicture?: string; isSandbox?: boolean } | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isDisconnectingLinkedin, setIsDisconnectingLinkedin] = useState(false);
+
+  const fetchGoogleStatus = async () => {
+    try {
+      const res = await integrationsService.getGoogleStatus();
+      if (res.success) {
+        setGoogleStatus(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch Google Calendar status:", err);
+    }
+  };
+
+  const fetchLinkedinStatus = async () => {
+    try {
+      const res = await integrationsService.getLinkedinStatus();
+      if (res.success) {
+        setLinkedinStatus(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch LinkedIn status:", err);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    const statusParam = params.get("status");
+    const messageParam = params.get("message");
+
+    if (tabParam) {
+      setActive(tabParam);
+    }
+
+    if (statusParam === "success") {
+      toast.success("Connection Successful", "Account connected successfully.");
+      window.history.replaceState({}, document.title, window.location.pathname + "?tab=integrations");
+    } else if (statusParam === "error") {
+      toast.error("Connection Failed", messageParam || "Could not connect account.");
+      window.history.replaceState({}, document.title, window.location.pathname + "?tab=integrations");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (active === "integrations") {
+      fetchGoogleStatus();
+      fetchLinkedinStatus();
+    }
+  }, [active]);
+
+  const handleConnectGoogle = () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      toast.error("Error", "You are not logged in.");
+      return;
+    }
+    window.location.href = `${API_BASE_URL}/integrations/google/auth?token=${token}`;
+  };
+
+  const handleDisconnectGoogle = async () => {
+    try {
+      setIsDisconnecting(true);
+      await integrationsService.disconnectGoogle();
+      toast.success("Disconnected", "Google Calendar disconnected.");
+      setGoogleStatus({ connected: false });
+    } catch (err: any) {
+      toast.error("Error", err.response?.data?.message || "Failed to disconnect Google account.");
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+
+  const handleConnectLinkedin = () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      toast.error("Error", "You are not logged in.");
+      return;
+    }
+    window.location.href = `${API_BASE_URL}/integrations/linkedin/auth?token=${token}`;
+  };
+
+  const handleDisconnectLinkedin = async () => {
+    try {
+      setIsDisconnectingLinkedin(true);
+      await integrationsService.disconnectLinkedin();
+      toast.success("Disconnected", "LinkedIn profile disconnected.");
+      setLinkedinStatus({ connected: false });
+    } catch (err: any) {
+      toast.error("Error", err.response?.data?.message || "Failed to disconnect LinkedIn profile.");
+    } finally {
+      setIsDisconnectingLinkedin(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -99,7 +214,7 @@ export default function SettingsPage() {
     if (brand) {
       setBrandVoice(brand.toneOfVoice || "");
       setBrandColor(brand.primaryColor || "");
-      setBrandHashtags(brand.defaultHashtags?.join(" ") || "");
+      setBrandHashtags(Array.isArray(brand.defaultHashtags) ? brand.defaultHashtags.join(" ") : "");
     }
   }, [brand]);
 
@@ -219,6 +334,13 @@ export default function SettingsPage() {
         },
       };
 
+      if (orderData.keyId.includes("mock") || orderData.orderId.startsWith("order_mock_")) {
+        setMockCheckoutOptions(options);
+        setShowMockCheckoutModal(true);
+        setIsProcessingPayment(false);
+        return;
+      }
+
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
     } catch (err: any) {
@@ -227,6 +349,24 @@ export default function SettingsPage() {
       setIsProcessingPayment(false);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutPlanId = params.get("checkoutPlanId");
+    if (checkoutPlanId && billingData && !isLoadingBilling) {
+      const isCurrent = billingData?.subscription?.planId === checkoutPlanId;
+      if (!isCurrent) {
+        // Clear param from URL to avoid repeating on re-renders
+        const url = new URL(window.location.href);
+        url.searchParams.delete("checkoutPlanId");
+        window.history.replaceState({}, "", url.toString());
+
+        setTimeout(() => {
+          handleRazorpayCheckout(checkoutPlanId);
+        }, 1000);
+      }
+    }
+  }, [billingData, isLoadingBilling]);
 
   const formatBytes = (bytes: number) => {
     if (!bytes) return "0 MB";
@@ -462,10 +602,13 @@ export default function SettingsPage() {
                               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{p.name}</span>
                               {isCurrent && <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-0">Current</Badge>}
                             </div>
-                            <div className="mt-2.5 flex items-baseline gap-1">
-                              <span className="text-2xl font-bold">INR {displayPrice}</span>
-                              <span className="text-xs text-muted-foreground">/{billingCycle === "yearly" ? "yr" : "mo"}</span>
-                            </div>
+                             <div 
+                               className={cn("mt-2.5 flex items-baseline gap-1 transition-colors", !isCurrent && "cursor-pointer hover:text-primary")}
+                               onClick={() => !isCurrent && handleRazorpayCheckout(p.id)}
+                             >
+                               <span className="text-2xl font-bold">INR {displayPrice}</span>
+                               <span className="text-xs text-muted-foreground">/{billingCycle === "yearly" ? "yr" : "mo"}</span>
+                             </div>
                             <ul className="mt-4 space-y-2 text-xs text-muted-foreground border-t border-border pt-3">
                               <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary shrink-0" /> {p.aiLimit} AI Requests</li>
                               <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-primary shrink-0" /> {p.campaigns} Campaigns limit</li>
@@ -575,6 +718,120 @@ export default function SettingsPage() {
             </>
           )}
 
+          {active === "integrations" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-primary" />
+                  Third-Party Integrations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Google Calendar Integration */}
+                <div className="flex items-start justify-between rounded-xl border border-border p-5 bg-card/50 transition-all hover:bg-card">
+                  <div className="flex gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 dark:bg-red-950/30 text-red-600">
+                      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold">Google Calendar</h4>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                        Automatically synchronize your campaign dates and schedule reminder events in your Google account.
+                      </p>
+                      {googleStatus?.connected ? (
+                        <div className="flex items-center gap-2 mt-3 text-xs text-green-600 font-medium">
+                          <Check className="h-3.5 w-3.5" />
+                          Connected as {googleStatus.email} {googleStatus.isSandbox && "(Sandbox)"}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground font-medium">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Not connected
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    {googleStatus?.connected ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={isDisconnecting}
+                        onClick={handleDisconnectGoogle}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleConnectGoogle}
+                      >
+                        Connect Account
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* LinkedIn Integration */}
+                <div className="flex items-start justify-between rounded-xl border border-border p-5 bg-card/50 transition-all hover:bg-card">
+                  <div className="flex gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/30 text-blue-600">
+                      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold">LinkedIn</h4>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                        Connect and authenticate your LinkedIn account to publish immediate or scheduled posts and track metrics.
+                      </p>
+                      {linkedinStatus?.connected ? (
+                        <div className="flex items-center gap-2 mt-3 text-xs text-green-600 font-medium">
+                          {linkedinStatus.profilePicture ? (
+                            <img src={linkedinStatus.profilePicture} alt="Avatar" className="h-5 w-5 rounded-full object-cover" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                          Connected as {linkedinStatus.name} {linkedinStatus.isSandbox && "(Sandbox)"}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground font-medium">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          Not connected
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    {linkedinStatus?.connected ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={isDisconnectingLinkedin}
+                        onClick={handleDisconnectLinkedin}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleConnectLinkedin}
+                      >
+                        Connect Account
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {active === "theme" && (
             <Card>
               <CardHeader><CardTitle className="text-base">Appearance</CardTitle></CardHeader>
@@ -618,6 +875,85 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {showMockCheckoutModal && mockCheckoutOptions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Header branding */}
+            <div className="relative bg-gradient-to-r from-primary to-indigo-600 px-6 py-8 text-white">
+              <div className="absolute top-4 right-4 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/90">
+                Sandbox Mode
+              </div>
+              <h3 className="font-display text-xl font-bold">Strategix AI Payments</h3>
+              <p className="mt-1 text-xs text-white/70">Secure simulated checkout order gateway</p>
+            </div>
+
+            {/* Content Details */}
+            <div className="p-6 space-y-5">
+              <div className="rounded-xl bg-muted/40 p-4 border border-border/60">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Order details</p>
+                <div className="mt-2.5 flex items-baseline justify-between">
+                  <span className="text-sm font-medium text-foreground">{mockCheckoutOptions.description}</span>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-xs font-semibold text-muted-foreground">INR</span>
+                    <span className="text-xl font-extrabold text-foreground">{mockCheckoutOptions.amount / 100}</span>
+                  </div>
+                </div>
+                <div className="mt-2 flex justify-between text-xs text-muted-foreground border-t border-border/40 pt-2.5">
+                  <span>Order ID</span>
+                  <span className="font-mono text-[10px]">{mockCheckoutOptions.order_id}</span>
+                </div>
+              </div>
+
+              {/* Prefill user details */}
+              <div className="space-y-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Billing Customer</p>
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[10px]">Name</span>
+                    <span className="font-medium text-foreground">{mockCheckoutOptions.prefill.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px]">Email</span>
+                    <span className="font-medium text-foreground truncate block">{mockCheckoutOptions.prefill.email}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* simulated payment methods */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Select payment status</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={async () => {
+                      await mockCheckoutOptions.handler({
+                        razorpay_order_id: mockCheckoutOptions.order_id,
+                        razorpay_payment_id: `pay_mock_${Date.now()}`,
+                        razorpay_signature: "mock_signature",
+                      });
+                      setShowMockCheckoutModal(false);
+                    }}
+                    className="flex flex-col items-center justify-center rounded-xl border border-success/30 bg-success/5 p-4 hover:bg-success/10 transition-colors text-success font-medium text-sm group"
+                  >
+                    <Check className="h-5 w-5 mb-1 text-success group-hover:scale-110 transition-transform" />
+                    Simulate Success
+                  </button>
+                  <button
+                    onClick={() => {
+                      mockCheckoutOptions.modal.ondismiss();
+                      setShowMockCheckoutModal(false);
+                    }}
+                    className="flex flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 p-4 hover:bg-destructive/10 transition-colors text-destructive font-medium text-sm group"
+                  >
+                    <X className="h-5 w-5 mb-1 text-destructive group-hover:scale-110 transition-transform" />
+                    Simulate Failure
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

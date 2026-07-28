@@ -1,6 +1,8 @@
 import AuthService from "../services/auth.service.js";
 import ApiResponse from "../utils/apiResponse.js";
 import ApiError from "../utils/apiError.js";
+import EmailService from "../services/email.service.js";
+import User from "../models/user.model.js";
 
 class AuthController {
   static async register(req, res, next) {
@@ -76,6 +78,36 @@ class AuthController {
       return ApiResponse.success(res, "Tokens refreshed", {
         token: result.accessToken,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async forgotPassword(req, res, next) {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        throw new ApiError("Email is required", 400);
+      }
+
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) {
+        throw new ApiError("User with this email does not exist", 404);
+      }
+
+      const resetToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+      console.log("==========================================");
+      console.log("PASSWORD RESET REQUESTED");
+      console.log(`Email: ${email}`);
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      console.log(`Reset Link: ${frontendUrl}/login?resetToken=${resetToken}`);
+      console.log("==========================================");
+
+      const resetLink = `${frontendUrl}/login?resetToken=${resetToken}`;
+      await EmailService.sendPasswordResetEmail(email, user.name, resetLink);
+
+      return ApiResponse.success(res, "Password reset link sent to your email");
     } catch (error) {
       next(error);
     }

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Instagram, Linkedin, Facebook, Twitter, Mail, FileText, Hash, MousePointerClick, Image as ImageIcon, Copy, Check, Pencil, RefreshCw, Heart, Save, Send, Loader as Loader2, Wand as Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/input";
+import { Textarea, Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -80,8 +80,34 @@ export default function ContentStudioPage() {
   const [result, setResult] = useState<any>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set(["ct1"]));
   const [copied, setCopied] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T10:00`;
+  });
 
   const { createContent, generateAIContent, contentItems: recentDrafts } = useContent();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const scheduleDateParam = params.get("scheduleDate");
+    if (scheduleDateParam) {
+      const date = new Date(scheduleDateParam);
+      if (!isNaN(date.getTime())) {
+        const pad = (n: number) => n.toString().padStart(2, "0");
+        const formatted = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        setScheduleDate(formatted);
+        setShowScheduleModal(true);
+        // Clear param from URL to avoid modal reopening on re-renders
+        const url = new URL(window.location.href);
+        url.searchParams.delete("scheduleDate");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -143,9 +169,16 @@ export default function ContentStudioPage() {
   const handleSchedule = async () => {
     if (!result) return;
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(10, 0, 0, 0);
+      const selectedDate = new Date(scheduleDate);
+      if (isNaN(selectedDate.getTime())) {
+        toast.error("Invalid Date", "Please select a valid date and time.");
+        return;
+      }
+      const minDate = new Date(Date.now() - 120000); // 2 minutes grace
+      if (selectedDate < minDate) {
+        toast.error("Invalid Date", "Scheduled date must be in the future.");
+        return;
+      }
 
       await createContent({
         title: result.title || "AI Generated Content",
@@ -155,9 +188,13 @@ export default function ContentStudioPage() {
         platform: current.label,
         type: activeType,
         status: "scheduled",
-        scheduledFor: tomorrow.toISOString(),
+        scheduledFor: selectedDate.toISOString(),
       });
-      toast.success("Content scheduled!", `Successfully scheduled for ${tomorrow.toLocaleDateString()} at 10:00 AM.`);
+      toast.success(
+        "Content scheduled!",
+        `Successfully scheduled for ${selectedDate.toLocaleDateString()} at ${selectedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+      );
+      setShowScheduleModal(false);
     } catch (err: any) {
       toast.error("Scheduling failed", err.response?.data?.message || "Failed to schedule content.");
     }
@@ -311,7 +348,7 @@ export default function ContentStudioPage() {
                       {isFav ? "Favorited" : "Favorite"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={handleSave}><Save className="h-3.5 w-3.5" /> Save</Button>
-                    <Button size="sm" className="ml-auto" onClick={handleSchedule}><Send className="h-3.5 w-3.5" /> Schedule</Button>
+                    <Button size="sm" className="ml-auto" onClick={() => setShowScheduleModal(true)}><Send className="h-3.5 w-3.5" /> Schedule</Button>
                   </div>
                 </Card>
               </motion.div>
@@ -370,6 +407,33 @@ export default function ContentStudioPage() {
           </div>
         </div>
       </div>
+
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg animate-in zoom-in-95 duration-200">
+            <h3 className="font-display text-lg font-semibold text-foreground">Schedule Content</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground">Select a custom date and time to publish this content on {current.label}.</p>
+            
+            <div className="mt-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label>Posting Date & Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduleDate}
+                  onChange={(e: any) => setScheduleDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full h-10 px-3 rounded-lg border border-border"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" size="sm" onClick={() => setShowScheduleModal(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleSchedule}>Confirm Schedule</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

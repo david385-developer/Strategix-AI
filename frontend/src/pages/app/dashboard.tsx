@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, Megaphone, CalendarClock, TrendingUp, Activity, Rocket, ArrowRight, CircleCheck as CheckCircle2, Clock, Eye, Heart, MessageCircle, Share2, Zap, Plus, ChartBar as BarChart3, SquarePen as PenSquare } from "lucide-react";
+import { integrationsService } from "@/services/integrations";
+import { Sparkles, Megaphone, CalendarClock, TrendingUp, Activity, Rocket, ArrowRight, CircleCheck as CheckCircle2, Clock, Eye, Heart, MessageCircle, Share2, Zap, Plus, ChartBar as BarChart3, SquarePen as PenSquare, Globe } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +22,15 @@ const sparkData = [20, 35, 28, 45, 38, 52, 48, 60, 55, 68, 72, 80];
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data, isLoading } = useDashboard();
+  const [linkedinStatus, setLinkedinStatus] = useState<any>(null);
+
+  useEffect(() => {
+    integrationsService.getLinkedinStatus()
+      .then((res) => {
+        if (res.success) setLinkedinStatus(res.data);
+      })
+      .catch((err) => console.error("Failed to fetch LinkedIn status on dashboard:", err));
+  }, []);
 
   if (isLoading) {
     return (
@@ -253,33 +264,100 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Quick actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2.5">
-            {[
-              { icon: Megaphone, label: "New Campaign", to: "/app/campaigns/new", color: "bg-primary/10 text-primary" },
-              { icon: PenSquare, label: "Create Content", to: "/app/content-studio", color: "bg-chart-2/10 text-chart-2" },
-              { icon: Sparkles, label: "Ask AI", to: "/app/ai-assistant", color: "bg-chart-4/10 text-chart-4" },
-              { icon: CalendarClock, label: "Schedule Post", to: "/app/calendar", color: "bg-warning/10 text-warning" },
-              { icon: BarChart3, label: "View Reports", to: "/app/analytics", color: "bg-chart-5/10 text-chart-5" },
-              { icon: Plus, label: "Invite Member", to: "/app/team", color: "bg-success/10 text-success" },
-            ].map((a) => (
-              <Link
-                key={a.label}
-                to={a.to}
-                className="group flex flex-col gap-2 rounded-xl border border-border p-3.5 transition-all hover:border-primary/30 hover:shadow-soft"
-              >
-                <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", a.color)}>
-                  <a.icon className="h-4 w-4" />
+        {/* Quick actions & LinkedIn Column */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2.5">
+              {[
+                { icon: Megaphone, label: "New Campaign", to: "/app/campaigns/new", color: "bg-primary/10 text-primary" },
+                { icon: PenSquare, label: "Create Content", to: "/app/content-studio", color: "bg-chart-2/10 text-chart-2" },
+                { icon: Sparkles, label: "Ask AI", to: "/app/ai-assistant", color: "bg-chart-4/10 text-chart-4" },
+                { icon: CalendarClock, label: "Schedule Post", to: "/app/calendar", color: "bg-warning/10 text-warning" },
+                { icon: BarChart3, label: "View Reports", to: "/app/analytics", color: "bg-chart-5/10 text-chart-5" },
+                { icon: Plus, label: "Invite Member", to: "/app/team", color: "bg-success/10 text-success" },
+              ].map((a) => (
+                <Link
+                  key={a.label}
+                  to={a.to}
+                  className="group flex flex-col gap-2 rounded-xl border border-border p-3.5 transition-all hover:border-primary/30 hover:shadow-soft"
+                >
+                  <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", a.color)}>
+                    <a.icon className="h-4 w-4" />
+                  </div>
+                  <p className="text-xs font-medium text-foreground">{a.label}</p>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* LinkedIn Channel Overview Card */}
+          <Card className="border-blue-100 dark:border-blue-950/30">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/30 text-blue-600">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+                  </svg>
                 </div>
-                <p className="text-xs font-medium text-foreground">{a.label}</p>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+                <CardTitle className="text-base font-semibold">LinkedIn Channel</CardTitle>
+              </div>
+              {linkedinStatus?.connected && (
+                <Badge className="bg-green-100 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-0">Connected</Badge>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {linkedinStatus?.connected ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-border">
+                      {linkedinStatus.profilePicture ? (
+                        <img src={linkedinStatus.profilePicture} alt="Avatar" className="h-full w-full rounded-full object-cover" />
+                      ) : (
+                        <AvatarFallback className="bg-primary/10 text-primary">LI</AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{linkedinStatus.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{linkedinStatus.isSandbox ? "Sandbox Simulation Mode" : "Official OAuth API Connection"}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center bg-muted/30 dark:bg-muted/10 rounded-xl p-2.5">
+                    <div>
+                      <p className="font-display text-base font-bold text-foreground">{formatNumber(linkedinStatus.impressions || 0)}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">Impressions</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-base font-bold text-foreground">{formatNumber(linkedinStatus.reactions || 0)}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">Reactions</p>
+                    </div>
+                    <div>
+                      <p className="font-display text-base font-bold text-foreground">{formatNumber(linkedinStatus.comments || 0)}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">Comments</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs border-t border-border/60 pt-3">
+                    <span className="text-muted-foreground">Published: <strong className="text-foreground">{linkedinStatus.publishedCount || 0}</strong></span>
+                    <span className="text-muted-foreground">Scheduled: <strong className="text-foreground">{linkedinStatus.scheduledCount || 0}</strong></span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-4 text-center">
+                  <Globe className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-xs font-semibold text-foreground">LinkedIn not connected</p>
+                  <p className="text-[11px] text-muted-foreground max-w-[200px] mt-1">Connect profile under Settings to publish campaigns.</p>
+                  <Button variant="outline" size="sm" className="mt-4 w-full h-8 text-xs" asChild>
+                    <Link to="/app/settings?tab=integrations">Connect Account</Link>
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Third row */}

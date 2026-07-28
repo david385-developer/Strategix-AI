@@ -5,6 +5,7 @@ export const apiLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === "development" || req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1",
   message: {
     success: false,
     message: "Too many requests from this IP, please try again after 15 minutes",
@@ -17,6 +18,7 @@ export const authLimiter = rateLimit({
   max: 15, // Limit login and register requests
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === "development" || req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1",
   message: {
     success: false,
     message: "Too many authentication attempts, please try again after 15 minutes",

@@ -59,6 +59,9 @@ class AIController {
 
   static async getSuggestions(req, res, next) {
     try {
+      const workspaceId = req.user.activeWorkspaceId;
+      const brand = await BrandProfile.findOne({ workspaceId });
+
       const suggestions = [
         "Generate a 30-day content calendar for Instagram",
         "Write 5 LinkedIn posts about AI in marketing",
@@ -67,6 +70,13 @@ class AIController {
         "Draft an email sequence to re-engage inactive users",
         "Generate hashtags for a summer fashion campaign",
       ];
+
+      if (brand) {
+        suggestions[1] = `Write 3 LinkedIn posts for ${brand.businessName}`;
+        suggestions[2] = `Create a campaign strategy targeting ${brand.targetAudience}`;
+        suggestions[3] = `Suggest customer personas in the ${brand.industry} space`;
+      }
+
       return ApiResponse.success(res, "Suggestions retrieved", { suggestions });
     } catch (error) {
       next(error);

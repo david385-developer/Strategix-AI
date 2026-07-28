@@ -8,6 +8,8 @@ import ApiResponse from "../utils/apiResponse.js";
 import ApiError from "../utils/apiError.js";
 import { verifyWebhookSignature } from "../utils/webhookVerifier.js";
 import NotificationService from "../services/notification.service.js";
+import EmailService from "../services/email.service.js";
+import User from "../models/user.model.js";
 
 class PaymentController {
   static async createCheckout(req, res, next) {
@@ -75,10 +77,20 @@ class PaymentController {
         case "payment.failed": {
           const rzpPayment = payload.payment.entity;
           const razorpayOrderId = rzpPayment.order_id;
-          await Payment.findOneAndUpdate(
+          const errorMsg = rzpPayment.error_description || "Payment failed";
+          const payment = await Payment.findOneAndUpdate(
             { razorpayOrderId },
-            { $set: { paymentStatus: "failed", failureReason: rzpPayment.error_description || "Payment failed" } }
+            { $set: { paymentStatus: "failed", failureReason: errorMsg } },
+            { new: true }
           );
+          if (payment) {
+            const userDoc = await User.findById(payment.userId);
+            if (userDoc) {
+              const notes = rzpPayment.notes || {};
+              const planId = notes.planId || "starter";
+              await EmailService.sendPaymentFailureEmail(userDoc.email, userDoc.name, planId, errorMsg).catch(console.error);
+            }
+          }
           break;
         }
 

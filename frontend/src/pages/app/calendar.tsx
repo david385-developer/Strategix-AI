@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { contentStatusConfig, channelColors, platformIcons } from "@/lib/content-helpers";
 import type { ContentStatus } from "@/types";
+import { useNavigate } from "react-router-dom";
 
 const statusLegend: { status: ContentStatus; label: string }[] = [
   { status: "scheduled", label: "Scheduled" },
@@ -27,9 +28,16 @@ import { useCampaigns } from "@/hooks/use-campaigns";
 import { useToast } from "@/components/ui/toast";
 
 export default function CalendarPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [view, setView] = useState<"month" | "week">("month");
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 1)); // July 2026
+
+  const handleCreateOnDate = (d: Date) => {
+    const newDate = new Date(d);
+    newDate.setHours(10, 0, 0, 0);
+    navigate(`/app/content-studio?scheduleDate=${newDate.toISOString()}`);
+  };
 
   const [platformFilter, setPlatformFilter] = useState("all");
   const [campaignFilter, setCampaignFilter] = useState("all");
@@ -122,7 +130,7 @@ export default function CalendarPage() {
         description="Plan, schedule, and visualize your content across all channels."
         breadcrumbs={[{ label: "Dashboard", href: "/app/dashboard" }, { label: "Calendar" }]}
         actions={
-          <Button><Plus className="h-4 w-4" /> Schedule Post</Button>
+          <Button onClick={() => navigate("/app/content-studio")}><Plus className="h-4 w-4" /> Schedule Post</Button>
         }
       />
 
@@ -222,7 +230,10 @@ export default function CalendarPage() {
                     )}>
                       {d.getDate()}
                     </span>
-                    <button className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100">
+                    <button 
+                      onClick={() => handleCreateOnDate(d)}
+                      className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                    >
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>

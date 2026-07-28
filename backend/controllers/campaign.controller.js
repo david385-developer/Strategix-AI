@@ -9,7 +9,7 @@ class CampaignController {
       if (!workspaceId) {
         throw new ApiError("No active workspace selected", 400);
       }
-      const campaign = await CampaignService.createCampaign(workspaceId, req.user._id, req.body);
+      const campaign = await CampaignService.createCampaign(workspaceId, req.user, req.body);
       return ApiResponse.success(res, "Campaign created successfully", { campaign }, 201);
     } catch (error) {
       next(error);
@@ -48,7 +48,7 @@ class CampaignController {
       if (!workspaceId) {
         throw new ApiError("No active workspace selected", 400);
       }
-      const campaign = await CampaignService.updateCampaign(req.params.id, workspaceId, req.body);
+      const campaign = await CampaignService.updateCampaign(req.params.id, workspaceId, req.body, req.user);
       return ApiResponse.success(res, "Campaign updated successfully", { campaign });
     } catch (error) {
       next(error);
@@ -61,7 +61,7 @@ class CampaignController {
       if (!workspaceId) {
         throw new ApiError("No active workspace selected", 400);
       }
-      await CampaignService.deleteCampaign(req.params.id, workspaceId);
+      await CampaignService.deleteCampaign(req.params.id, workspaceId, req.user);
       return ApiResponse.success(res, "Campaign deleted successfully");
     } catch (error) {
       next(error);
@@ -70,7 +70,11 @@ class CampaignController {
 
   static async getAIStrategy(req, res, next) {
     try {
-      const strategy = await CampaignService.getAIStrategy(req.params.id);
+      const workspaceId = req.user.activeWorkspaceId;
+      if (!workspaceId) {
+        throw new ApiError("No active workspace selected", 400);
+      }
+      const strategy = await CampaignService.getAIStrategy(req.params.id, workspaceId);
       if (!strategy) {
         return ApiResponse.success(res, "No strategy found for this campaign", { strategy: null });
       }
@@ -86,8 +90,21 @@ class CampaignController {
       if (!workspaceId) {
         throw new ApiError("No active workspace selected", 400);
       }
-      const result = await CampaignService.generateAIStrategy(req.params.id, workspaceId);
+      const result = await CampaignService.generateAIStrategy(req.params.id, workspaceId, req.user);
       return ApiResponse.success(res, "AI strategy generated successfully", result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async emailCampaignDetails(req, res, next) {
+    try {
+      const workspaceId = req.user.activeWorkspaceId;
+      if (!workspaceId) {
+        throw new ApiError("No active workspace selected", 400);
+      }
+      const result = await CampaignService.emailCampaignDetails(req.params.id, workspaceId, req.user);
+      return ApiResponse.success(res, "Campaign details email sent successfully", result);
     } catch (error) {
       next(error);
     }

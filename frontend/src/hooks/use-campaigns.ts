@@ -104,6 +104,13 @@ export function useCampaign(id?: string) {
     },
   });
 
+  const emailCampaignMutation = useMutation({
+    mutationFn: () => {
+      if (!id) throw new Error("No campaign ID provided");
+      return campaignService.emailCampaignDetails(id);
+    },
+  });
+
   return {
     campaign: campaignQuery.data,
     isLoading: campaignQuery.isLoading,
@@ -116,5 +123,7 @@ export function useCampaign(id?: string) {
     isLoadingStrategy: aiStrategyQuery.isLoading,
     generateStrategy: generateStrategyMutation.mutateAsync,
     isGeneratingStrategy: generateStrategyMutation.isPending,
+    emailCampaign: emailCampaignMutation.mutateAsync,
+    isEmailing: emailCampaignMutation.isPending,
   };
 }

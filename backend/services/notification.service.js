@@ -4,8 +4,16 @@ import User from "../models/user.model.js";
 
 class NotificationService {
   static async notifyWorkspace(workspaceId, title, description, icon = "system") {
+    const allowed = ["approval", "mention", "published", "ai", "comment", "system"];
+    const verifiedIcon = allowed.includes(icon) ? icon : "system";
     const users = await User.find({ activeWorkspaceId: workspaceId }).select("_id");
-    if (users.length) await Notification.insertMany(users.map(({ _id: userId }) => ({ userId, title, description, icon })));
+    if (users.length) await Notification.insertMany(users.map(({ _id: userId }) => ({ userId, title, description, icon: verifiedIcon })));
+  }
+
+  static async notifyUser(userId, title, description, icon = "system") {
+    const allowed = ["approval", "mention", "published", "ai", "comment", "system"];
+    const verifiedIcon = allowed.includes(icon) ? icon : "system";
+    await Notification.create({ userId, title, description, icon: verifiedIcon });
   }
   static async getNotifications(userId) {
     const notifications = await Notification.find({ userId }).sort({ createdAt: -1 });

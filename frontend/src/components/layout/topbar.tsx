@@ -33,7 +33,7 @@ export function Topbar() {
   const initials = user?.name ? user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2) : "SC";
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border bg-card/80 px-4 backdrop-blur-xl sm:px-6 md:gap-6">
       {/* Mobile menu */}
       <Button
         variant="ghost"
@@ -55,7 +55,7 @@ export function Topbar() {
       <div className="relative flex-1 max-w-md">
         <div
           className={cn(
-            "flex items-center gap-2 rounded-lg border bg-muted/40 px-3 transition-all",
+            "flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 transition-all",
             searchFocused ? "border-primary ring-2 ring-ring/20 bg-card" : "border-transparent"
           )}
         >
@@ -73,15 +73,15 @@ export function Topbar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-2.5 sm:gap-4 lg:gap-5">
         {/* AI Quick Action */}
         <Button
           variant="default"
           size="sm"
-          className="hidden md:inline-flex"
+          className="hidden md:inline-flex gap-2"
           onClick={() => setAiOpen(true)}
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="h-4 w-4 shrink-0" />
           <span className="hidden lg:inline">Ask AI</span>
         </Button>
 
@@ -89,10 +89,10 @@ export function Topbar() {
         <Button
           variant="outline"
           size="sm"
-          className="hidden md:inline-flex"
+          className="hidden md:inline-flex gap-2"
           onClick={() => navigate("/app/campaigns/new")}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 shrink-0" />
           <span className="hidden lg:inline">New Campaign</span>
         </Button>
 
@@ -101,17 +101,16 @@ export function Topbar() {
           {theme === "light" ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
         </Button>
 
-        {/* Notifications */}
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative h-10 w-10 flex items-center justify-center"
           onClick={() => navigate("/app/notifications")}
           aria-label="Notifications"
         >
-          <Bell className="h-[18px] w-[18px]" />
+          <Bell className="h-[22px] w-[22px]" />
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            <span className="absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-extrabold text-destructive-foreground ring-2 ring-card shadow-sm leading-none">
               {unreadCount}
             </span>
           )}

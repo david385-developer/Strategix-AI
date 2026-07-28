@@ -47,4 +47,9 @@ export const campaignService = {
     const res = await apiClient.post(`/campaigns/${id}/strategy/generate`);
     return res.data;
   },
+
+  async emailCampaignDetails(id: string) {
+    const res = await apiClient.post(`/campaigns/${id}/email`);
+    return res.data;
+  },
 };

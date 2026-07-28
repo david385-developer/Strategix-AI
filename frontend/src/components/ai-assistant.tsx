@@ -45,7 +45,7 @@ export function AIAssistant() {
       if (res.success) {
         setMessages((m) => [
           ...m,
-          { id: Math.random().toString(36).slice(2), role: "assistant", content: res.data.response || res.data.message },
+          { id: Math.random().toString(36).slice(2), role: "assistant", content: res.data.content },
         ]);
       }
     } catch (err) {
