@@ -10,11 +10,8 @@ import EmailService from "./email.service.js";
 
 class WorkspaceService {
   static async createWorkspace(ownerId, name, urlSlug) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-      const existingSlug = await Workspace.findOne({ urlSlug }).session(session);
+      const existingSlug = await Workspace.findOne({ urlSlug });
       if (existingSlug) {
         throw new ApiError("Workspace URL slug is already taken", 400);
       }
@@ -25,7 +22,7 @@ class WorkspaceService {
         ownerId,
       });
 
-      await workspace.save({ session });
+      await workspace.save();
 
       // Create brand profile for new workspace
       const brand = new BrandProfile({
@@ -36,16 +33,11 @@ class WorkspaceService {
         brandTone: "Professional",
       });
 
-      await brand.save({ session });
-
-      await session.commitTransaction();
-      session.endSession();
+      await brand.save();
 
       await NotificationService.notifyWorkspace(workspace._id, "Workspace created", `Welcome to your new workspace "${name}"!`, "system");
       return workspace;
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }

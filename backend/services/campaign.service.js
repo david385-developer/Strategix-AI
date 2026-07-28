@@ -219,42 +219,34 @@ class CampaignService {
   }
 
   static async deleteCampaign(campaignId, workspaceId, userObj) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-      const campaign = await Campaign.findOne({ _id: campaignId, workspaceId }).session(session);
+      const campaign = await Campaign.findOne({ _id: campaignId, workspaceId });
       if (!campaign) {
         throw new ApiError("Campaign not found", 404);
       }
 
       // 1. Find all content items under this campaign
-      const contentItems = await Content.find({ campaignId }).session(session);
+      const contentItems = await Content.find({ campaignId });
       const contentIds = contentItems.map(item => item._id);
 
       // 2. Delete calendar events for those contents
-      await CalendarEvent.deleteMany({ contentId: { $in: contentIds } }).session(session);
+      await CalendarEvent.deleteMany({ contentId: { $in: contentIds } });
 
       // 3. Delete content items themselves
-      await Content.deleteMany({ campaignId }).session(session);
+      await Content.deleteMany({ campaignId });
 
       // 4. Delete AI Strategy
-      await AIStrategy.findOneAndDelete({ campaignId }).session(session);
+      await AIStrategy.findOneAndDelete({ campaignId });
 
       // 5. Delete Campaign itself
-      await Campaign.findByIdAndDelete(campaignId).session(session);
+      await Campaign.findByIdAndDelete(campaignId);
 
-      await session.commitTransaction();
-      session.endSession();
-
-      // Trigger calendar deletion and reminder cancellations post-transaction commit
+      // Trigger calendar deletion and reminder cancellations post-deletion
       await GoogleCalendarService.deleteEvent(userObj._id, campaignId);
       await CampaignReminderService.cancelReminders(campaignId);
 
       return true;
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }

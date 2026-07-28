@@ -76,8 +76,6 @@ class ContentService {
 
   static async createContent(workspaceId, userObj, contentData) {
     if (contentData.status === "scheduled") await this.assertScheduleAvailable(workspaceId, contentData.platform, contentData.scheduledFor);
-    const session = await mongoose.startSession();
-    session.startTransaction();
 
     try {
       const content = new Content({
@@ -86,12 +84,9 @@ class ContentService {
         createdById: userObj._id,
       });
 
-      await content.save({ session });
-      await this.syncCalendarEvent(content, session);
-      await this.syncLinkedInPost(content, session);
-
-      await session.commitTransaction();
-      session.endSession();
+      await content.save();
+      await this.syncCalendarEvent(content);
+      await this.syncLinkedInPost(content);
 
       try {
         const GoogleCalendarService = (await import("./googleCalendar.service.js")).default;
@@ -115,8 +110,6 @@ class ContentService {
 
       return content;
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }
@@ -195,9 +188,6 @@ class ContentService {
   }
 
   static async updateContent(contentId, workspaceId, updateData) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
       if (updateData.status === "scheduled" || updateData.scheduledFor) {
         const existing = await Content.findOne({ _id: contentId, workspaceId });
@@ -207,18 +197,15 @@ class ContentService {
       const content = await Content.findOneAndUpdate(
         { _id: contentId, workspaceId },
         { $set: updateData },
-        { new: true, runValidators: true, session }
+        { new: true, runValidators: true }
       );
 
       if (!content) {
         throw new ApiError("Content item not found", 404);
       }
 
-      await this.syncCalendarEvent(content, session);
-      await this.syncLinkedInPost(content, session);
-
-      await session.commitTransaction();
-      session.endSession();
+      await this.syncCalendarEvent(content);
+      await this.syncLinkedInPost(content);
 
       try {
         const GoogleCalendarService = (await import("./googleCalendar.service.js")).default;
@@ -229,30 +216,22 @@ class ContentService {
 
       return content;
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }
 
   static async deleteContent(contentId, workspaceId) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-      const content = await Content.findOne({ _id: contentId, workspaceId }).session(session);
+      const content = await Content.findOne({ _id: contentId, workspaceId });
       if (!content) {
         throw new ApiError("Content item not found", 404);
       }
 
-      await Content.findByIdAndDelete(contentId).session(session);
-      await CalendarEvent.findOneAndDelete({ contentId }).session(session);
+      await Content.findByIdAndDelete(contentId);
+      await CalendarEvent.findOneAndDelete({ contentId });
       
       const LinkedInPost = (await import("../models/linkedinPost.model.js")).default;
-      await LinkedInPost.deleteOne({ contentId }).session(session);
-
-      await session.commitTransaction();
-      session.endSession();
+      await LinkedInPost.deleteOne({ contentId });
 
       try {
         const GoogleCalendarService = (await import("./googleCalendar.service.js")).default;
@@ -263,8 +242,6 @@ class ContentService {
 
       return true;
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }

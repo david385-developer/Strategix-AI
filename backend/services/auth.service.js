@@ -13,13 +13,10 @@ import EmailService from "./email.service.js";
 
 class AuthService {
   static async registerUser(userData) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
       const { name, email, password } = userData;
 
-      const existingUser = await User.findOne({ email }).session(session);
+      const existingUser = await User.findOne({ email });
       if (existingUser) {
         throw new ApiError("Email already in use", 400);
       }
@@ -36,7 +33,7 @@ class AuthService {
         role: "owner", // First user is the owner
       });
 
-      await user.save({ session });
+      await user.save();
 
       // Create default workspace
       const workspace = new Workspace({
@@ -45,7 +42,7 @@ class AuthService {
         ownerId: user._id,
       });
 
-      await workspace.save({ session });
+      await workspace.save();
 
       // Create default brand profile
       const brand = new BrandProfile({
@@ -56,21 +53,18 @@ class AuthService {
         brandTone: "Professional",
       });
 
-      await brand.save({ session });
+      await brand.save();
 
       // Update user's active workspace
       user.activeWorkspaceId = workspace._id;
-      await user.save({ session });
+      await user.save();
 
       // Generate tokens
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
 
       user.refreshToken = refreshToken;
-      await user.save({ session });
-
-      await session.commitTransaction();
-      session.endSession();
+      await user.save();
 
       // Trigger asynchronous Welcome Email dispatch
       EmailService.sendWelcomeEmail(user.email, user.name).catch(console.error);
@@ -87,8 +81,6 @@ class AuthService {
         refreshToken,
       };
     } catch (error) {
-      await session.abortTransaction();
-      session.endSession();
       throw error;
     }
   }
